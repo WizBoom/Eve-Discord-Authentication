@@ -2,5 +2,5 @@ env
 *.pyc
 __pycache__
 *.db
-config.cfg
+config.json
 log.txt
