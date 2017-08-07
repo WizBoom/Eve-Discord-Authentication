@@ -248,7 +248,7 @@ async def schedule_corp_update():
     while True:
         try:
             logger.info('Sleeping for {} seconds'.format(DISCORD_AUTH_SLEEP))
-            await asyncio.sleep(30)
+            await asyncio.sleep(DISCORD_AUTH_SLEEP)
             logger.info('Updating discord names')
             result = await check_corp()
             logger.info(result) 
