@@ -9,9 +9,6 @@ import sys
 import discord
 from discord.ext import commands
 
-from Crypto.Cipher import AES
-import base64
-
 import sqlite3
 
 DISCORD_AUTH_SLEEP = 300
@@ -223,6 +220,8 @@ async def auth(context):
         if role is None:
             logger.error("Role " + entry['role_name'] + " not found!")
             continue
+        print(entry['corp_id'])
+        print(corp_id)
         if entry['corp_id'] == corp_id:
             if role not in member.roles:
                 logger.info("Giving " + member.nick + " the " + role.name + " role!")
@@ -255,7 +254,6 @@ async def schedule_corp_update():
         except Exception as e:
             logger.error('Exception in schedule_corp_update(): ' + str(e))
 
-#TODO: Look at using char affiliation
 async def check_corp():
     #Retrieve members in database
     data= get_all_authenticated_users()
