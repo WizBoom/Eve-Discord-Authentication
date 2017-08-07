@@ -1,4 +1,5 @@
 from flask import Flask, render_template, url_for, redirect, request, flash
+from flask_sqlalchemy import SQLAlchemy
 from preston.esi import Preston
 import sqlite3
 from datetime import datetime
@@ -25,34 +26,26 @@ handler.setFormatter(formatter)
 handler.setLevel(config['LOGGING']['LEVEL']['FILE'])
 logger.addHandler(handler)
 
+#Create app
 app = Flask(__name__, template_folder='templates')
+app.config['SQLALCHEMY_DATABASE_URI'] = config['SQLALCHEMY_DATABASE_URI']
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+#Create sqlalchemy object
+db = SQLAlchemy(app)
+
+from models import *
+
 user_agent = 'GETIN Discord Auth app ({})'.format(config['MAINTAINER'])
 # EVE CREST API connection
 preston = Preston(
 	user_agent=user_agent,
-	client_id=config['CLIENT ID'],
-	client_secret=config['CLIENT SECRET'],
-	callback_url=config['CALLBACK URL']
+	client_id=config['CLIENT_ID'],
+	client_secret=config['CLIENT_SECRET'],
+	callback_url=config['CALLBACK_URL']
 )
 
 AUTH_CODE_LENGTH = 32
-
-def get_user_with_character_id(character_id):
-	"""
-	Retrieve a user with a certain character id
-	Args:
-		int: character id
-	Returns:
-		list: users with that char id
-	"""
-	connection = sqlite3.connect('data.db')
-	cursor = connection.cursor()
-	cursor.execute('SELECT * FROM discord_users where character_id=?',(character_id,))
-	data = cursor.fetchall()
-	connection.close()
-	if not data:
-		return []
-	return data
 
 def generate_auth_token_and_insert(character_name,character_id):
 	"""
@@ -90,7 +83,6 @@ def login():
 	Returns;
 	str: rendered template 'login.html'
 	"""
-
 	return render_template('login.html',url=preston.get_authorize_url())
 
 @app.route('/callback')
@@ -116,11 +108,19 @@ def eve_oauth_callback():
 		flash('There was an authentication error signing you in.', 'error')
 		return redirect(url_for('login'))
 	character_info = auth.whoami()
-	character = get_user_with_character_id(character_info['CharacterID'])
-	if len(character) > 0:
-		return "Already authenticated with " + character_info['CharacterName'] + "! If you did not authenticate with that character, message a mentor!"
+	character = DiscordUser.query.filter(DiscordUser.character_id == character_info['CharacterID']).first()
+	#If character already exists with a discord id, inform user he is already authenticated, else
+	#return his token
+	if character is not None:
+		if character.discord_id is not None:
+			return "Already authenticated with " + character_info['CharacterName'] + "! If you did not authenticate with that character, message a mentor!"
+		return "!auth " + character.auth_code
 
-	token = generate_auth_token_and_insert(character_info['CharacterName'],character_info['CharacterID'])
+	#Add character
+	user = DiscordUser(character_info['CharacterName'],character_info['CharacterID'])
+	db.session.add(user)
+	db.session.commit()
+	token = user.auth_code
 	return "!auth " + token
 
 if __name__ == '__main__':
