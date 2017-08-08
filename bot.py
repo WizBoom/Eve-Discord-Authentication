@@ -9,126 +9,26 @@ import sys
 import discord
 from discord.ext import commands
 
+from app import db
+from app import app
+from models import *
 import sqlite3
 
-DISCORD_AUTH_SLEEP = 300
+DISCORD_AUTH_SLEEP = 3600
 CHUNK_SIZE = 20
 
 # config setup
 with open('config.json') as f:
     config = json.load(f)
 
-#logging setup
-logger = logging.getLogger('discord')
-logger.setLevel(config['LOGGING']['LEVEL']['ALL'])
-formatter = logging.Formatter(style='{', fmt='{asctime} [{levelname}] {message}', datefmt='%Y-%m-%d %H:%M:%S')
-handler = logging.StreamHandler(sys.stdout)
-handler.setFormatter(formatter)
-handler.setLevel(config['LOGGING']['LEVEL']['CONSOLE'])
-logger.addHandler(handler)
-handler = logging.FileHandler(config['LOGGING']['FILE'])
-handler.setFormatter(formatter)
-handler.setLevel(config['LOGGING']['LEVEL']['FILE'])
-logger.addHandler(handler)
-
 # bot setup
-logger.info('Creating bot object ...')
+app.logger.info('Creating bot object ...')
 bot = commands.Bot(command_prefix=config['COMMAND_PREFIX'], description=config['DESCRIPTION'])
-logger.info('Setup complete')
-
-def get_user_with_discord_id(id):
-    """
-    Retrieve a user with a certain discord_id
-    Args:
-        str: user discord ID
-    Returns:
-        list: users with that discord ID
-    """
-    connection = sqlite3.connect('data.db')
-    cursor = connection.cursor()
-    cursor.execute('SELECT * FROM discord_users WHERE discord_id=?',(id,))
-    data = cursor.fetchall()
-    connection.close()
-    if not data:
-        return []
-    return data
-
-def get_user_with_auth_code(auth_code):
-    """
-    Retrieve a user with a certain auth_code
-    Args:
-        str: user auth code
-    Returns:
-        list: users with that auth code
-    """
-    connection = sqlite3.connect('data.db')
-    cursor = connection.cursor()
-    cursor.execute('SELECT * FROM discord_users WHERE auth_code=?',(auth_code,))
-    data = cursor.fetchall()
-    connection.close()
-    if not data:
-        return []
-    return data
-
-def get_all_authenticated_users():
-    """
-    Retrieve a user with a certain auth_code
-    Args:
-        /
-    Returns:
-        list: authenticated users
-    """
-    connection = sqlite3.connect('data.db')
-    cursor = connection.cursor()
-    cursor.execute('SELECT * FROM discord_users where discord_id NOT NULL')
-    data = cursor.fetchall()
-    connection.close()
-    if not data:
-        return []
-    return data
-
-def set_user_discord_id_with_auth_code(auth_code, discord_id):
-    """
-    Set a user's discord_id
-    Args:
-        str: user auth code
-        str: user discord id
-    Returns:
-        /
-    """
-    try:
-        connection = sqlite3.connect('data.db')
-        cursor = connection.cursor()
-        cursor.execute('UPDATE discord_users SET discord_id=? WHERE auth_code=?', (discord_id, auth_code))
-        connection.commit()
-        connection.close()
-        logger.info("Added discord id " + discord_id + " to the database where auth code was " + auth_code +"!")
-    except Exception as e:
-        logger.error('Exception in on_message(): ' + str(e))
-
-def set_corp_id_and_alliance_id_with_character_id(corp_id, alliance_id, character_id):
-    """
-    Set a user's alliance and corp id
-    Args:
-        int: corp id
-        int: alliance id
-        int: character id
-    Returns:
-        /
-    """
-    try:
-        connection = sqlite3.connect('data.db')
-        cursor = connection.cursor()
-        cursor.execute('UPDATE discord_users SET corporation_id=?,alliance_id=? WHERE character_id=?', (corp_id, alliance_id,character_id))
-        connection.commit()
-        connection.close()
-        logger.info("Added corp id (" + str(corp_id) + ") and alliance id (" + str(alliance_id) +") to character id (" + str(character_id) + ")!")
-    except Exception as e:
-        logger.error('Exception in on_message(): ' + str(e))
+app.logger.info('Setup complete')
 
 @bot.event
 async def on_ready():
-    logger.info('Logged in')
+    app.logger.info('Logged in')
     await bot.change_presence(game=discord.Game(name='Auth stuff'))
 
 @bot.event
@@ -144,12 +44,12 @@ async def on_message(message):
         if message.author == bot.user:
             return
         if message.content.startswith(config['COMMAND_PREFIX']):
-            logger.info('Command "{}" from "{}" in "{}"'.format(message.content, message.author.name, message.channel.name))
+            app.logger.info('Command "{}" from "{}" in "{}"'.format(message.content, message.author.name, message.channel.name))
         if 'bot' in message.content.lower():
-            logger.info('Bot in message: "{}" by "{}" in "{}"'.format(message.content, message.author.name, message.channel.name))
+            app.logger.info('Bot in message: "{}" by "{}" in "{}"'.format(message.content, message.author.name, message.channel.name))
         await bot.process_commands(message)
     except Exception as e:
-        logger.error('Exception in on_message(): ' + str(e))
+        app.logger.error('Exception in on_message(): ' + str(e))
 
 @bot.command(
     name='auth',
@@ -163,7 +63,7 @@ async def command_auth(context):
         output = await auth(context)
         await bot.say(output)
     except Exception as e:
-        logger.error('Exception in !auth: ' + str(e))
+        app.logger.error('Exception in !auth: ' + str(e))
 
 async def auth(context):
     """Command - auth"""
@@ -176,29 +76,40 @@ async def auth(context):
     arg = arg.strip()
 
     #See if user already has an entry
-    discordUsers = get_user_with_discord_id(message.author.id)
-    if discordUsers:
-        return "Discord user already in database!"
+    discordQuery = DiscordUser.query.filter(DiscordUser.discord_id == message.author.id).first()
+    if discordQuery is not None:
+        error = "Discord user " + discordQuery.discord_id + " is already linked to a character (" + discordQuery.character_name +") in the database!"
+        app.logger.info(error)
+        return error
 
     #Add it into the database
-    authUsers = get_user_with_auth_code(arg)
-    if not authUsers:
-        return "Auth code not found!"
+    auth = DiscordUser.query.filter(DiscordUser.auth_code == arg).first()
+    if auth is None:
+        error = "Auth code " + arg + " not found!"
+        app.logger.info(error)
+        return error
 
     #Check if the character is already authenticated
-    if authUsers[0][7] is not None:
-        return "Already authenticated with " + authUsers[0][2] + "! If you did not authenticate with that character, message a mentor!"
+    if auth.discord_id is not None:
+        error = "Already authenticated with " + auth.character_name + "! If you did not authenticate with that character, message a mentor!"
+        app.logger.info(error)
+        return error
 
     #Check corp and alliance
-    r = requests.post("https://esi.tech.ccp.is/latest/characters/affiliation/?datasource=tranquility", json=[authUsers[0][3]],
+    app.logger.info("Making ESI post request to characters/affiliation endpoint")
+    r = requests.post("https://esi.tech.ccp.is/latest/characters/affiliation/?datasource=tranquility", json=[auth.character_id],
         headers = {'Content-Type': 'application/json', 'Accept':'application/json','User-Agent': 'Maintainer: ' + config['MAINTAINER']})
-    data = r.json()
+    result = r.json()
+    if not result:
+        error = "Character ID " + auth.character_id + " is not valid! Message a mentor!"
+        return error
+    data = result[0]
     #Update corp and alliance in json
     alliance_id = None
-    corp_id = data[0]['corporation_id']
+    corp_id = data['corporation_id']
     ticker = ""
-    if 'alliance_id' in data[0]:
-        alliance_id = data[0]['alliance_id']
+    if 'alliance_id' in data:
+        alliance_id = data['alliance_id']
         r = requests.get("https://esi.tech.ccp.is/latest/alliances/" + str(alliance_id) + "/?datasource=tranquility", headers={
             'User-Agent': 'Maintainer: ' + config['MAINTAINER']})
         ticker = r.json()['ticker']
@@ -209,58 +120,79 @@ async def auth(context):
 
     #Update nickname
     try:
-        await bot.change_nickname(message.author,"[" + ticker + "] " + authUsers[0][2])
+        nick = "[" + ticker + "] " + auth.character_name
+        app.logger.info("Changing nickname of discord account " + message.author.id + " to " + nick + "!")
+        await bot.change_nickname(message.author,nick)
     except Exception as e:
-        logger.error('Exception in change_nickname(): ' + str(e))
+        app.logger.error('Exception in change_nickname(): ' + str(e))
 
-    member = message.author
-    server = message.server
+    #Update roles if they're in a certain corp
+    rolesToGive = []
+    rolesToRemove = []
+
+    #Update auth role
+    authRole = discord.utils.get(message.server.roles,name=config['BASE_AUTH_ROLE'])
+    if authRole is None:
+        app.logger.error("Role " + config['BASE_AUTH_ROLE'] + " not found!")
+    else:
+        rolesToGive.append(authRole)
+
     for entry in config['DISCORD_AUTH_ROLES']:
-        role = discord.utils.get(server.roles, name=entry['role_name'])
+        role = discord.utils.get(message.server.roles, name=entry['role_name'])
         if role is None:
-            logger.error("Role " + entry['role_name'] + " not found!")
+            app.logger.error("Role " + entry['role_name'] + " not found!")
             continue
-        print(entry['corp_id'])
-        print(corp_id)
         if entry['corp_id'] == corp_id:
-            if role not in member.roles:
-                logger.info("Giving " + member.nick + " the " + role.name + " role!")
-                try:
-                    await bot.add_roles(member,role)
-                except Exception as e:
-                    logger.error('Exception in add_roles(): ' + str(e))
-            else:
-                if role in member.roles:
-                    logger.info("Removing " + role.name + " from " + member.nick + "!")
-                    try:
-                        await bot.remove_roles(member,role)
-                    except Exception as e:
-                        logger.error('Exception in remove_roles(): ' + str(e))
+            if role not in message.author.roles:
+                app.logger.info("Giving " + message.author.nick + " the " + role.name + " role!")
+                rolesToGive.append(role)
+        else:
+            if role in message.author.roles:
+                app.logger.info("Removing " + role.name + " from " + message.author.nick + "!")
+                rolesToRemove.append(role)
+
+    #Apply roles
+    if len(rolesToGive) > 0:
+        try:
+            await bot.add_roles(message.author,*rolesToGive)
+        except Exception as e:
+            app.logger.error('Exception in add_roles(): ' + str(e))
+
+    #Remove roles
+    if len(rolesToRemove) > 0:
+        try:
+            await bot.remove_roles(message.author,*rolesToRemove)
+        except Exception as e:
+            app.logger.error('Exception in remove_roles(): ' + str(e))
 
     #Update database
-    set_corp_id_and_alliance_id_with_character_id(corp_id, alliance_id, authUsers[0][3])
-    set_user_discord_id_with_auth_code(arg,message.author.id)
-    logger.info(authUsers[0][2] + " authenticated with discord id " + message.author.id)
-    return "Authenticated as " + authUsers[0][2]
+    auth.corporation_id = corp_id
+    auth.alliance_id = alliance_id
+    auth.discord_id = message.author.id
+    app.logger.info(auth.character_name + " (" + str(auth.corporation_id) +", " + str(auth.alliance_id) + ")" +" authenticated with discord id " + auth.discord_id)
+    db.session.commit()
+    return "Authenticated as " + auth.character_name
 
 async def schedule_corp_update():
     while True:
         try:
-            logger.info('Sleeping for {} seconds'.format(DISCORD_AUTH_SLEEP))
+            app.logger.info('Sleeping for {} seconds'.format(DISCORD_AUTH_SLEEP))
             await asyncio.sleep(DISCORD_AUTH_SLEEP)
-            logger.info('Updating discord names')
+            app.logger.info('Updating discord names')
             result = await check_corp()
-            logger.info(result) 
+            app.logger.info(result) 
         except Exception as e:
-            logger.error('Exception in schedule_corp_update(): ' + str(e))
+            app.logger.error('Exception in schedule_corp_update(): ' + str(e))
 
 async def check_corp():
     #Retrieve members in database
-    data= get_all_authenticated_users()
+    data = DiscordUser.query.filter(DiscordUser.discord_id != None).all()
 
+    #Sort the data since the return from esi is sorted too
     currentIndex = 0
-    sortedData = sorted(data,key=lambda x:x[3])
+    sortedData = sorted(data,key=lambda x:x.character_id)
 
+    #Break the data into chunks, since ESI has a max amount of characters per post request
     while currentIndex < len(sortedData):
         tempList = []
         tempIndex = 0
@@ -270,37 +202,39 @@ async def check_corp():
             currentIndex+=1
             if currentIndex >= len(sortedData):
                 break 
-        charIDList = [row[3] for row in tempList]
+        charIDList = [row.character_id for row in tempList]
         #Check corp and alliance
+        app.logger.info("Making ESI post request to characters/affiliation endpoint")
         r = requests.post("https://esi.tech.ccp.is/latest/characters/affiliation/?datasource=tranquility", json=charIDList,
             headers = {'Content-Type': 'application/json', 'Accept':'application/json','User-Agent': 'Maintainer: ' + config['MAINTAINER']})
         data = r.json()
         sortedJSON = sorted(data,key=lambda x:x['character_id'])
+        #Incase of a missmatch, remove the non-existant character IDs
         while len(sortedJSON) is not len(tempList):
-            logger.info("Number of characters in database does not match the amount of returned characters in ESI. Checking which character is no longer valid")
+            app.logger.info("Number of characters in database does not match the amount of returned characters in ESI. Checking which character is no longer valid")
             invalidList = []
             for char in charIDList:
-                logger.info("Checking if " + str(char) + " still exists...")
+                app.logger.info("Checking if " + str(char) + " still exists...")
                 rChar = requests.get("https://esi.tech.ccp.is/latest/characters/" + str(char) + "/?datasource=tranquility", headers={
                     'User-Agent': 'Maintainer: '+ config['MAINTAINER']
                     })
                 if 'error' in rChar.json():
                     invalidList.append(char)
-                    logger.info(str(char) + " is not a valid character! Removed from list!")
-            tempList = [t for t in tempList if t[3] not in invalidList]
+                    app.logger.info(str(char) + " is not a valid character! Removed from list!")
+            tempList = [t for t in tempList if t.character_id not in invalidList]
 
         for index in range(len(tempList)):
-            if not tempList[index][3] == sortedJSON[index]['character_id']:
-                logger.error("Character id " + str(tempList[index][3]) + " does not match the data equivelant " + str(sortedJSON[index][3]) + "!")
+            if not tempList[index].character_id == sortedJSON[index]['character_id']:
+                app.logger.error("Character id " + str(tempList[index].character_id) + " does not match the data equivelant " + str(sortedJSON[index].character_id) + "!")
                 continue
-            corpID_db = tempList[index][4]
-            allianceID_db = tempList[index][5]
+            corpID_db = tempList[index].corporation_id
+            allianceID_db = tempList[index].alliance_id
             allianceID = None
             if 'alliance_id' in sortedJSON[index]:
                 allianceID = sortedJSON[index]['alliance_id']
 
             if not corpID_db == sortedJSON[index]['corporation_id'] or not allianceID_db == allianceID:
-                logger.info(tempList[index][2]  + " has joined a new corp / alliance! Updating ticker.")
+                app.logger.info(tempList[index].character_name  + " has joined a new corp / alliance! Updating ticker.")
                 ticker = ""
                 if allianceID is not None:
                     allianceID = sortedJSON[index]['alliance_id']
@@ -316,51 +250,57 @@ async def check_corp():
                         })
                     ticker = rTicker.json()['ticker']
                 #Update id
-                set_corp_id_and_alliance_id_with_character_id(sortedJSON[index]['corporation_id'], allianceID, sortedJSON[index]['character_id'])
+                #set_corp_id_and_alliance_id_with_character_id(sortedJSON[index]['corporation_id'], allianceID, sortedJSON[index]['character_id'])
+                app.logger.info("Added corp id (" + str(sortedJSON[index]['corporation_id']) + ") and alliance id (" + str(allianceID) +") to character id (" + str(sortedJSON[index]['character_id']) + ")!")
+                user = DiscordUser.query.filter(DiscordUser.character_id == sortedJSON[index]['character_id']).first()
+                if user is None:
+                    app.logger.error("Character id " + sortedJSON[index]['character_id'] + " not found!")
+                    continue
+                user.corporation_id = sortedJSON[index]['corporation_id']
+                user.alliance_id = allianceID
+                db.session.commit()
                 #Set nickname and give role
                 try:
                     server = bot.get_server(config['SERVER'])
-                    member = server.get_member(tempList[index][7])
-                    await bot.change_nickname(member,"[" + ticker + "] " + tempList[index][2])
+                    member = server.get_member(tempList[index].discord_id)
+                    await bot.change_nickname(member,"[" + ticker + "] " + tempList[index].character_name)
 
                     for entry in config['DISCORD_AUTH_ROLES']:
                         role = discord.utils.get(server.roles, name=entry['role_name'])
                         if role is None:
-                            logger.error("Role " + entry['role_name'] + " not found!")
+                            app.logger.error("Role " + entry['role_name'] + " not found!")
                             continue
                         if entry['corp_id'] == sortedJSON[index]['corporation_id']:
                             if role not in member.roles:
-                                logger.info("Giving " + member.nick + " the " + role.name + " role!")
                                 try:
+                                    app.logger.info("Giving " + member.nick + " the " + role.name + " role!")
                                     await bot.add_roles(member,role)
                                 except Exception as e:
-                                    logger.error('Exception in add_roles(): ' + str(e))
+                                    app.logger.error('Exception in add_roles(): ' + str(e))
                         else:
                             if role in member.roles:
-                                logger.info("Removing " + role.name + " from " + member.nick + "!")
                                 try:
+                                    app.logger.info("Removing " + role.name + " from " + member.nick + "!")
                                     await bot.remove_roles(member,role)
                                 except Exception as e:
-                                    logger.error('Exception in remove_roles(): ' + str(e))
+                                    app.logger.error('Exception in remove_roles(): ' + str(e))
                 except Exception as e:
-                    logger.error('Exception in change_nickname(): ' + str(e))
+                    app.logger.error('Exception in change_nickname(): ' + str(e))
     return "Corp check done!"
-
-
 
 if __name__ == '__main__':
     try:
-        logger.info('Scheduling background tasks ...')
-        logger.info('Starting run loop ...')
+        app.logger.info('Scheduling background tasks ...')
+        app.logger.info('Starting run loop ...')
         bot.loop.create_task(schedule_corp_update())
         bot.run(config['TOKEN'])
     except KeyboardInterrupt:
-        logger.warning('Logging out ...')
+        app.logger.warning('Logging out ...')
         bot.loop.run_until_complete(bot.logout())
-        logger.warning('Logged out')
+        app.logger.warning('Logged out')
     except Exception as e:
-        logger.error('Caught unknown error: ' + str(e))
+        app.logger.error('Caught unknown error: ' + str(e))
     finally:
-        logger.warning('Closing ...')
+        app.logger.warning('Closing ...')
         bot.loop.close()
-        logger.info('Done')
+        app.logger.info('Done')
