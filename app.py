@@ -46,7 +46,7 @@ preston = Preston(
 
 AUTH_CODE_LENGTH = 32
 
-@app.route('/discord_auth')
+@app.route('/')
 def login():
 	"""Shows a user the EVE SSO link so they can log in.
 	Args:
@@ -56,7 +56,7 @@ def login():
 	"""
 	return render_template('login.html',url=preston.get_authorize_url())
 
-@app.route('/discord_auth/callback')
+@app.route('/callback')
 def eve_oauth_callback():
 	"""Completes the EVE SSO login. Here, hr.models.User models
 	and hr.models.Member models are created for the user if they don't
