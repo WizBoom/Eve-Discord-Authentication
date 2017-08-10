@@ -144,11 +144,11 @@ async def auth(context):
             continue
         if entry['corp_id'] == corp_id:
             if role not in message.author.roles:
-                app.logger.info("Giving " + message.author.nick + " the " + role.name + " role!")
+                app.logger.info("Giving " + message.author.id + " the " + role.name + " role!")
                 rolesToGive.append(role)
         else:
             if role in message.author.roles:
-                app.logger.info("Removing " + role.name + " from " + message.author.nick + "!")
+                app.logger.info("Removing " + role.name + " from " + message.author.id + "!")
                 rolesToRemove.append(role)
 
     #Apply roles
