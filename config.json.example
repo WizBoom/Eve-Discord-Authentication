@@ -1,0 +1,26 @@
+{
+    "TOKEN": "",
+    "COMMAND_PREFIX": "!",
+    "DESCRIPTION": "",
+    "LOGGING": {
+        "LEVEL": {
+            "ALL": 20,
+            "CONSOLE": 20,
+            "FILE": 20
+        },
+        "FILE": ""
+    },
+    "MAINTAINER": "",
+    "SERVER":"",
+    "DISCORD_AUTH_ROLES":[
+        {
+            "role_name":"",
+            "corp_id":
+        }
+    ],
+    "CLIENT_ID":"",
+    "CLIENT_SECRET":"",
+    "CALLBACK_URL": "",
+    "SQLALCHEMY_DATABASE_URI": "sqlite:///data.db",
+    "BASE_AUTH_ROLE":""
+}
