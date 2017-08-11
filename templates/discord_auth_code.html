@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+
+{% block content %}
+<div class="center">
+	<h3 class="center">Press this button and paste the code in the private conversation with the GETIN bot to authenticate yourself on the Discord!</h3>
+	<a class="waves-effect waves-light btn" onclick="copy()">Copy Auth Command</a>
+  	<br>
+   	<div class="row">
+    	<div class="input-field col s12">
+      		<input readonly value="!auth {{auth_code}}" id="command" type="text">
+       		<label for="command">Auth Command</label>
+        </div>
+  	</div>
+</div>
+
+<script type="text/javascript">
+	function copy(){
+		var copytext = document.getElementById("command");
+		copytext.select();
+		try{
+			var succesful = document.execCommand('copy');
+			var message = successful ? 'succesful':'unsuccesful';
+			console.log("Text was " + message)
+		}
+		catch(error){
+			console.log("There was an error while copying")
+		}
+	}
+</script>
+{% endblock content %}

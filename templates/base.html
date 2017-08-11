@@ -1,17 +1,62 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-  <head>
-    {% block head %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <title>{% block title %}{% endblock %} - My Webpage</title>
-    {% endblock %}
-  </head>
-  <body>
-    <div id="content">{% block content %}{% endblock %}</div>
-    <div id="footer">
-      {% block footer %}
-      &copy; Copyright 2010 by <a href="http://domain.invalid/">you</a>.
-      {% endblock %}
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GETIN Discord</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.97.6/css/materialize.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/global.css') }}">
+  <script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.97.6/js/materialize.min.js"></script>
+  <link rel="shortcut icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+  <style>
+    div.card-panel p {
+      font-size: 1.2em;
+    }
+  </style>
+  <script>
+    $(document).ready(function() {
+      setTimeout(function() {
+        $('.flashed.disappear').fadeOut('slow');
+      }, 10000);
+      $(".button-collapse").sideNav();
+    });
+  </script>
+  {% block head %}{% endblock head %}
+</head>
+<body class="grey lighten-5">
+
+<header>
+  <nav>
+    <div class="nav-wrapper grey darken-3">
+      <div class="container">
+        <a class="brand-logo" href="/">GETIN</a>
+        <a href="#" data-activates="mobile-demo" class="button-collapse"><i class="material-icons">menu</i></a>
+      </div>
     </div>
-  </body>
+  </nav>
+</header>
+
+<main>
+  <div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          {% if message %}
+            {% if category == 'success' %}
+              <div class="card-panel green lighten-1 flashed disappear">
+            {% else %}
+              <div class="card-panel red lighten-1 flashed">
+            {% endif %}
+              <p>{{ message }}</p>
+            </div>
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock content %}
+  </div>
+</main>
+
+</body>
 </html>

@@ -87,7 +87,8 @@ def eve_oauth_callback():
 			app.logger.info("User tried to authenticate with already authenticated character " + character_info['CharacterName'] + "!")
 			return "Already authenticated with " + character_info['CharacterName'] + "! If you did not authenticate with that character, message a mentor!"
 		app.logger.info("User retrieved existing auth code of character " + character_info['CharacterName'] + "!")
-		return "!auth " + character.auth_code
+		#return "!auth " + character.auth_code
+		return render_template('discord_auth_code.html',auth_code=character.auth_code)
 
 	#Add character
 	user = DiscordUser(character_info['CharacterName'],character_info['CharacterID'])
@@ -95,7 +96,8 @@ def eve_oauth_callback():
 	db.session.commit()
 	token = user.auth_code
 	app.logger.info("Added user " + character_info['CharacterName'] + " with auth token " + token + "!")
-	return "!auth " + token
+	#return "!auth " + token
+	return render_template('discord_auth_code.html',auth_code=character.auth_code)
 
 if __name__ == '__main__':
 	app.run()
