@@ -317,7 +317,7 @@ async def remove_auth_user_roles(discordID):
     if member is None:
         app.logger.error("Member " + discordID + " not found in remove_auth_user_roles()!")
         for i in range(len(deleteList['DISCORD_REMOVE_LIST'])):
-            if deleteList['DISCORD_REMOVE_LIST'] == discordID
+            if deleteList['DISCORD_REMOVE_LIST'] == discordID:
             #index = deleteList['DISCORD_REMOVE_LIST'].index(discordID)
                 deleteList['DISCORD_REMOVE_LIST'].pop(i)
                 break
