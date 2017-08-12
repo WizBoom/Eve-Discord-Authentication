@@ -29,4 +29,4 @@ class DiscordUser(db.Model):
 		self.on_server = on_server
 
 	def __repr__(self):
-		return '{},{},{},{},{},{},{},{},{}'.format(self.id,self.date,self.character_name,self.character_id,self.corporation_id,self.alliance_id,self.auth_code,self.discord_id,self.discord_name)
+		return '{},{},{},{},{},{},{},{}'.format(self.id,self.date,self.character_name,self.character_id,self.corporation_id,self.alliance_id,self.discord_id,self.discord_name)

@@ -15,6 +15,9 @@ from requests_oauthlib import OAuth2Session
 with open('config.json') as f:
     config = json.load(f)
 
+with open('deleteList.json') as f:
+    deleteList = json.load(f)
+
 #Create app
 app = Flask(__name__, template_folder='templates')
 app.config['SQLALCHEMY_DATABASE_URI'] = config['SQLALCHEMY_DATABASE_URI']
@@ -170,6 +173,14 @@ def remove_auth():
 	#DATABASE REMOVAL
 	try:
 		u = DiscordUser.query.filter(DiscordUser.character_id == session['EveID']).first()
+		#from bot import DISCORD_TEST
+		#DISCORD_TEST = False
+		#remove_auth_user_roles(u.discord_id, bot)
+		deleteList['DISCORD_REMOVE_LIST'].append(u.discord_id)
+        
+		with open('deleteList.json', 'w') as f:
+			json.dump(deleteList, f, indent=4)
+
 		db.session.delete(u)
 		db.session.commit()
 

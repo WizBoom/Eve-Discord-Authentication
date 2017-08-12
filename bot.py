@@ -15,11 +15,15 @@ from models import *
 import sqlite3
 
 DISCORD_BOT_AUTH_SLEEP = 60
+DATABASE_MEMBER_UPDATE = 86400
 CHUNK_SIZE = 20
 
 # config setup
 with open('config.json') as f:
     config = json.load(f)
+
+with open('deleteList.json') as f:
+    deleteList = json.load(f)
 
 # bot setup
 app.logger.info('Creating bot object ...')
@@ -30,6 +34,13 @@ app.logger.info('Setup complete')
 async def on_ready():
     app.logger.info('Logged in')
     await bot.change_presence(game=discord.Game(name='Auth stuff'))
+    #Do some more checks
+    server = bot.get_server(config['DISCORD_SERVER'])
+    if server is None:
+        app.logger.error("Server " + config['DISCORD_SERVER'] + " not found!")
+    channel = server.get_channel(config['DISCORD_PRIVATE_COMMAND_CHANNELS']['RECRUITMENT'])
+    if channel is None:
+        app.logger.error("Channel " + config['DISCORD_PRIVATE_COMMAND_CHANNELS']['RECRUITMENT]'] + " not found!")
 
 @bot.event
 async def on_message(message):
@@ -43,7 +54,7 @@ async def on_message(message):
     try:
         if message.author == bot.user:
             return
-        if message.content.startswith(config['COMMAND_PREFIX']):
+        if message.content.startswith(config['DISCORD_COMMAND_PREFIX']):
             app.logger.info('Command "{}" from "{}" in "{}"'.format(message.content, message.author.name, message.channel.name))
         if 'bot' in message.content.lower():
             app.logger.info('Bot in message: "{}" by "{}" in "{}"'.format(message.content, message.author.name, message.channel.name))
@@ -61,13 +72,7 @@ async def on_member_remove(member):
         None
     """
     server = bot.get_server(config['DISCORD_SERVER'])
-    if server is None:
-        app.logger.error("Server " + config['DISCORD_SERVER'] + " not found!")
-        return
     channel = server.get_channel(config['DISCORD_PRIVATE_COMMAND_CHANNELS']['RECRUITMENT'])
-    if channel is None:
-        app.logger.error("Channel " + config['DISCORD_PRIVATE_COMMAND_CHANNELS']['RECRUITMENT]'] + " not found!")
-        return
 
     #Query the database to see if they're in there
     discordQuery = DiscordUser.query.filter(DiscordUser.discord_id == member.id).first()
@@ -182,6 +187,7 @@ async def schedule_corp_update():
 
 async def check_corp():
     #Retrieve members in database
+    server = bot.get_server(config['DISCORD_SERVER'])                 
     data = DiscordUser.query.filter(DiscordUser.on_server == True).all()
 
     #Sort the data since the return from esi is sorted too
@@ -220,6 +226,7 @@ async def check_corp():
             tempList = [t for t in tempList if t.character_id not in invalidList]
 
         for index in range(len(tempList)):
+            member = server.get_member(tempList[index].discord_id)
             if not tempList[index].character_id == sortedJSON[index]['character_id']:
                 app.logger.error("Character id " + str(tempList[index].character_id) + " does not match the data equivelant " + str(sortedJSON[index].character_id) + "!")
                 continue
@@ -229,8 +236,8 @@ async def check_corp():
             if 'alliance_id' in sortedJSON[index]:
                 allianceID = sortedJSON[index]['alliance_id']
 
-            if not corpID_db == sortedJSON[index]['corporation_id'] or not allianceID_db == allianceID:
-                app.logger.info(tempList[index].character_name  + " has joined a new corp / alliance! Updating ticker.")
+            if not corpID_db == sortedJSON[index]['corporation_id'] or not allianceID_db == allianceID or member.nick is None or member.nick.find(tempList[index].character_name) == -1:
+                app.logger.info(tempList[index].character_name  + "'s nickname needs to be changed due to change in corp / alliance / invalid username")
                 ticker = ""
                 if allianceID is not None:
                     allianceID = sortedJSON[index]['alliance_id']
@@ -246,7 +253,6 @@ async def check_corp():
                         })
                     ticker = rTicker.json()['ticker']
                 #Update id
-                #set_corp_id_and_alliance_id_with_character_id(sortedJSON[index]['corporation_id'], allianceID, sortedJSON[index]['character_id'])
                 app.logger.info("Added corp id (" + str(sortedJSON[index]['corporation_id']) + ") and alliance id (" + str(allianceID) +") to character id (" + str(sortedJSON[index]['character_id']) + ")!")
                 user = DiscordUser.query.filter(DiscordUser.character_id == sortedJSON[index]['character_id']).first()
                 if user is None:
@@ -257,8 +263,6 @@ async def check_corp():
                 db.session.commit()
                 #Set nickname and give role
                 try:
-                    server = bot.get_server(config['DISCORD_SERVER'])
-                    member = server.get_member(tempList[index].discord_id)
                     await bot.change_nickname(member,"[" + ticker + "] " + tempList[index].character_name)
 
                     for entry in config['DISCORD_AUTH_ROLES']:
@@ -284,11 +288,94 @@ async def check_corp():
                     app.logger.error('Exception in change_nickname(): ' + str(e))
     return "Corp check done!"
 
+async def schedule_remove_auth_roles():
+    while True:
+        try:
+            await asyncio.sleep(1)
+            with open('deleteList.json') as f:
+                deleteList = json.load(f)
+            for discordID in deleteList['DISCORD_REMOVE_LIST']:
+                await remove_auth_user_roles(discordID)
+        except Exception as e:
+            app.logger.error('Exception in schedule_remove_auth_roles(): ' + str(e))
+
+async def remove_auth_user_roles(discordID):
+    """
+    Remove all roles related to authentication
+    Args:
+        str: Discord ID of the user
+    Returns:
+        None
+    """
+    roleList = []
+    server = bot.get_server(config['DISCORD_SERVER'])
+    if server is None:
+        app.logger.error("Server " + config['DISCORD_SERVER'] + " not found!")
+        return
+
+    member = server.get_member(discordID)
+    if member is None:
+        app.logger.error("Member " + discordID + " not found in remove_auth_user_roles()!")
+        index = deleteList['DISCORD_REMOVE_LIST'].index(discordID)
+        deleteList['DISCORD_REMOVE_LIST'].pop(index)
+
+        with open('deleteList.json', 'w') as f:
+            json.dump(deleteList, f, indent=4)
+        return
+
+    authRole = discord.utils.get(server.roles,name=config['BASE_AUTH_ROLE'])
+    if authRole is None:
+        app.logger.error("Role " + config['BASE_AUTH_ROLE'] + " not found!")
+    else:
+        roleList.append(authRole)
+
+    for entry in config['DISCORD_AUTH_ROLES']:
+        role = discord.utils.get(server.roles, name=entry['role_name'])
+        if role is None:
+                app.logger.error("Role " + entry['role_name'] + " not found!")
+                continue
+        elif role in member.roles:
+            roleList.append(role)
+
+    try:
+        await bot.remove_roles(member,*roleList)
+        index = deleteList['DISCORD_REMOVE_LIST'].index(discordID)
+        deleteList['DISCORD_REMOVE_LIST'].pop(index)
+        app.logger.info(discordID + ' has been unauthenticated!')
+
+        with open('deleteList.json', 'w') as f:
+            json.dump(deleteList, f, indent=4)
+
+    except Exception as e:
+        app.logger.error('Exception in remove_roles(): ' + str(e))
+
+async def schedule_update_on_server():
+    while True:
+        try:
+            app.logger.info('Sleeping for {} seconds'.format(DATABASE_MEMBER_UPDATE))
+            await asyncio.sleep(DATABASE_MEMBER_UPDATE)
+            app.logger.info('Updating server connected users')
+            dq = DiscordUser.query.filter(DiscordUser.on_server == False).all()
+            server = bot.get_server(config['DISCORD_SERVER'])
+            if server is None:
+                app.logger.error("Server " + config['DISCORD_SERVER'] + " not found!")
+                return
+            for m in server.members:
+                for r in dq:
+                    if m.id == r.discord_id:
+                        app.logger.info("User " + m.name + " was on the server but was not marked! being so")
+                        await on_member_join(m)
+                        break
+        except Exception as e:
+            app.logger.error('Exception in schedule_update_on_server(): ' + str(e))
+
 if __name__ == '__main__':
     try:
         app.logger.info('Scheduling background tasks ...')
         app.logger.info('Starting run loop ...')
         bot.loop.create_task(schedule_corp_update())
+        bot.loop.create_task(schedule_remove_auth_roles())
+        bot.loop.create_task(schedule_update_on_server())
         bot.run(config['DISCORD_TOKEN'])
     except KeyboardInterrupt:
         app.logger.warning('Logging out ...')
