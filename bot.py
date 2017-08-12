@@ -14,7 +14,7 @@ from app import app
 from models import *
 import sqlite3
 
-DISCORD_AUTH_SLEEP = 3600
+DISCORD_BOT_AUTH_SLEEP = 3600
 CHUNK_SIZE = 20
 
 # config setup
@@ -23,7 +23,7 @@ with open('config.json') as f:
 
 # bot setup
 app.logger.info('Creating bot object ...')
-bot = commands.Bot(command_prefix=config['COMMAND_PREFIX'], description=config['DESCRIPTION'])
+bot = commands.Bot(command_prefix=config['DISCORD_BOT_COMMAND_PREFIX'], description=config['DISCORD_BOT_DESCRIPTION'])
 app.logger.info('Setup complete')
 
 @bot.event
@@ -76,9 +76,9 @@ async def auth(context):
     arg = arg.strip()
 
     #See if user already has an entry
-    discordQuery = DiscordUser.query.filter(DiscordUser.discord_id == message.author.id).first()
+    discordQuery = DiscordUser.query.filter(DiscordUser.DISCORD_BOT_id == message.author.id).first()
     if discordQuery is not None:
-        error = "Discord user " + discordQuery.discord_id + " is already linked to a character (" + discordQuery.character_name +") in the database!"
+        error = "Discord user " + discordQuery.DISCORD_BOT_id + " is already linked to a character (" + discordQuery.character_name +") in the database!"
         app.logger.info(error)
         return error
 
@@ -90,7 +90,7 @@ async def auth(context):
         return error
 
     #Check if the character is already authenticated
-    if auth.discord_id is not None:
+    if auth.DISCORD_BOT_id is not None:
         error = "Already authenticated with " + auth.character_name + "! If you did not authenticate with that character, message a mentor!"
         app.logger.info(error)
         return error
@@ -137,7 +137,7 @@ async def auth(context):
     else:
         rolesToGive.append(authRole)
 
-    for entry in config['DISCORD_AUTH_ROLES']:
+    for entry in config['DISCORD_BOT_AUTH_ROLES']:
         role = discord.utils.get(message.server.roles, name=entry['role_name'])
         if role is None:
             app.logger.error("Role " + entry['role_name'] + " not found!")
@@ -168,16 +168,16 @@ async def auth(context):
     #Update database
     auth.corporation_id = corp_id
     auth.alliance_id = alliance_id
-    auth.discord_id = message.author.id
-    app.logger.info(auth.character_name + " (" + str(auth.corporation_id) +", " + str(auth.alliance_id) + ")" +" authenticated with discord id " + auth.discord_id)
+    auth.DISCORD_BOT_id = message.author.id
+    app.logger.info(auth.character_name + " (" + str(auth.corporation_id) +", " + str(auth.alliance_id) + ")" +" authenticated with discord id " + auth.DISCORD_BOT_id)
     db.session.commit()
     return "Authenticated as " + auth.character_name
 
 async def schedule_corp_update():
     while True:
         try:
-            app.logger.info('Sleeping for {} seconds'.format(DISCORD_AUTH_SLEEP))
-            await asyncio.sleep(DISCORD_AUTH_SLEEP)
+            app.logger.info('Sleeping for {} seconds'.format(DISCORD_BOT_AUTH_SLEEP))
+            await asyncio.sleep(DISCORD_BOT_AUTH_SLEEP)
             app.logger.info('Updating discord names')
             result = await check_corp()
             app.logger.info(result) 
@@ -186,7 +186,7 @@ async def schedule_corp_update():
 
 async def check_corp():
     #Retrieve members in database
-    data = DiscordUser.query.filter(DiscordUser.discord_id != None).all()
+    data = DiscordUser.query.filter(DiscordUser.DISCORD_BOT_id != None).all()
 
     #Sort the data since the return from esi is sorted too
     currentIndex = 0
@@ -261,11 +261,11 @@ async def check_corp():
                 db.session.commit()
                 #Set nickname and give role
                 try:
-                    server = bot.get_server(config['SERVER'])
-                    member = server.get_member(tempList[index].discord_id)
+                    server = bot.get_server(config['DISCORD_BOT_SERVER'])
+                    member = server.get_member(tempList[index].DISCORD_BOT_id)
                     await bot.change_nickname(member,"[" + ticker + "] " + tempList[index].character_name)
 
-                    for entry in config['DISCORD_AUTH_ROLES']:
+                    for entry in config['DISCORD_BOT_AUTH_ROLES']:
                         role = discord.utils.get(server.roles, name=entry['role_name'])
                         if role is None:
                             app.logger.error("Role " + entry['role_name'] + " not found!")
@@ -293,7 +293,7 @@ if __name__ == '__main__':
         app.logger.info('Scheduling background tasks ...')
         app.logger.info('Starting run loop ...')
         bot.loop.create_task(schedule_corp_update())
-        bot.run(config['TOKEN'])
+        bot.run(config['DISCORD_BOT_TOKEN'])
     except KeyboardInterrupt:
         app.logger.warning('Logging out ...')
         bot.loop.run_until_complete(bot.logout())

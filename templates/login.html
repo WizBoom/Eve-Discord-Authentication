@@ -3,7 +3,38 @@
 
 {% block content %}
 <div class="center">
-  <h3 class="center">Use EVE's Single Sign-On to log in:</h3>
-  <a href="{{ url }}"><img src="https://i.imgur.com/qNdhCs4.png" alt="Click here to log in"></a>
+	{% if 'EveName' not in session or 'DiscordName' not in session%}
+	<h4 class="center">Log in with your EvE Online and Discord account to authenticate yourself on the GETIN Discord Server.</h4>
+	{% endif %}
+	<br>
+	{% if 'EveName' not in session %}
+	  	<a Onclick="window.location.href='{{eve_url}}'" class="waves-effect waves-light btn grey darken-3">Eve Login</a>
+	{%else%}
+		<body class="center">Logged in as {{session['EveName']}}</body>
+		{%if 'EveAvatar' in session and session['EveAvatar'] is not none %}
+			<img class="circle responsive-img" src="{{session['EveAvatar']}}" alt="Eve Avatar" width="64" height="64" style="vertical-align: middle">
+		{% endif %}
+	{% endif %}
+	<br><br>
+	{% if 'DiscordName' not in session%}
+	  	<a Onclick="window.location.href='{{discord_url}}'" class="waves-effect waves-light btn grey darken-3">Discord Login</a>
+	{%else%}
+		<body class="center">Logged in as {{session['DiscordName']}}</body>
+		{%if 'DiscordAvatar' in session and session['DiscordAvatar'] is not none%}
+			<img class="circle responsive-img" src="{{session['DiscordAvatar']}}" alt="Discord Avatar" width="64" height="64" style="vertical-align: middle">
+		{% endif %}
+	{% endif %}
+	<br><br><br>
+	{% if 'EveName' in session and 'DiscordName' in session%}
+		{%if session['Linked'] == true %}
+			<a Onclick="window.location.href='{{discord_invite}}'" class="waves-effect waves-light btn grey darken-3">Join server</a>
+			<a Onclick="window.location.href='{{url_for('remove_auth')}}'" class="waves-effect waves-light btn red darken-3">Remove authentication</a>
+		{% else %}
+			<a Onclick="window.location.href='{{url_for('link_to_database')}}'" class="waves-effect waves-light btn grey darken-3">Link</a>
+		{% endif %}	
+	{% endif %}
+	{%if 'FA' in session %}
+	<p><small>You don't have Two-Factor-Authentication on your Discord account! We highly recommend you set that up, for a more secure account.</small></p>
+	{% endif%}
 </div>
 {% endblock content %}
