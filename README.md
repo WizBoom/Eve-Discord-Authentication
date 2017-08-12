@@ -7,7 +7,7 @@ Download, install the Python prerequisites, and copy / edit the config:
 ```bash
 $ git clone https://github.com/WizBoom/Eve-Discord-Authentication
 $ cd Eve-Discord-Authentication
-$ virtualenv env
+$ virtualenv -p python3.6 env
 $ . env/bin/activate
 $ pip install -r requirements.txt
 $ cp config.json.example config.json
