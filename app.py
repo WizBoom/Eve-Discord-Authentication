@@ -150,7 +150,7 @@ def eve_oauth_callback():
 		session['Linked'] = True
 		session['DiscordID'] = character.discord_id
 		session['DiscordName'] = character.discord_name
-		session['DiscordAvatar'] = get_discord_avatar(character.discord_id,character.discord_avatar)
+		session['DiscordAvatar'] = character.discord_avatar
 		if character.discord_avatar is None:
 			session['DiscordAvatar'] = None
 

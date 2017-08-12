@@ -14,7 +14,7 @@ from app import app
 from models import *
 import sqlite3
 
-DISCORD_BOT_AUTH_SLEEP = 3600
+DISCORD_BOT_AUTH_SLEEP = 60
 CHUNK_SIZE = 20
 
 # config setup
@@ -23,7 +23,7 @@ with open('config.json') as f:
 
 # bot setup
 app.logger.info('Creating bot object ...')
-bot = commands.Bot(command_prefix=config['DISCORD_BOT_COMMAND_PREFIX'], description=config['DISCORD_BOT_DESCRIPTION'])
+bot = commands.Bot(command_prefix=config['DISCORD_COMMAND_PREFIX'], description=config['DISCORD_DESCRIPTION'])
 app.logger.info('Setup complete')
 
 @bot.event
@@ -51,127 +51,123 @@ async def on_message(message):
     except Exception as e:
         app.logger.error('Exception in on_message(): ' + str(e))
 
-@bot.command(
-    name='auth',
-    brief='Authenticate yourself onto the server',
-    help='Authenticate',
-    pass_context=True
-)
-async def command_auth(context):
-    """Command - auth"""
-    try:
-        output = await auth(context)
-        await bot.say(output)
-    except Exception as e:
-        app.logger.error('Exception in !auth: ' + str(e))
+@bot.event
+async def on_member_remove(member):
+    """
+    Event when user leaves the server
+    Args:
+        member (discord.Member) - member that left the server
+    Returns:
+        None
+    """
+    server = bot.get_server(config['DISCORD_SERVER'])
+    if server is None:
+        app.logger.error("Server " + config['DISCORD_SERVER'] + " not found!")
+        return
+    channel = server.get_channel(config['DISCORD_PRIVATE_COMMAND_CHANNELS']['RECRUITMENT'])
+    if channel is None:
+        app.logger.error("Channel " + config['DISCORD_PRIVATE_COMMAND_CHANNELS']['RECRUITMENT]'] + " not found!")
+        return
 
-async def auth(context):
-    """Command - auth"""
-    message = context.message
-    x = message.content.split()
-    if len(x) <= 1:
-        return "No arguments!"
-
-    arg = message.content.split(' ', 1)[1]
-    arg = arg.strip()
-
-    #See if user already has an entry
-    discordQuery = DiscordUser.query.filter(DiscordUser.DISCORD_BOT_id == message.author.id).first()
+    #Query the database to see if they're in there
+    discordQuery = DiscordUser.query.filter(DiscordUser.discord_id == member.id).first()
     if discordQuery is not None:
-        error = "Discord user " + discordQuery.DISCORD_BOT_id + " is already linked to a character (" + discordQuery.character_name +") in the database!"
-        app.logger.info(error)
-        return error
+        #Update that they are on the server
+        discordQuery.on_server = False
+        db.session.commit()
 
-    #Add it into the database
-    auth = DiscordUser.query.filter(DiscordUser.auth_code == arg).first()
-    if auth is None:
-        error = "Auth code " + arg + " not found!"
-        app.logger.info(error)
-        return error
-
-    #Check if the character is already authenticated
-    if auth.DISCORD_BOT_id is not None:
-        error = "Already authenticated with " + auth.character_name + "! If you did not authenticate with that character, message a mentor!"
-        app.logger.info(error)
-        return error
-
-    #Check corp and alliance
-    app.logger.info("Making ESI post request to characters/affiliation endpoint")
-    r = requests.post("https://esi.tech.ccp.is/latest/characters/affiliation/?datasource=tranquility", json=[auth.character_id],
-        headers = {'Content-Type': 'application/json', 'Accept':'application/json','User-Agent': 'Maintainer: ' + config['MAINTAINER']})
-    result = r.json()
-    if not result:
-        error = "Character ID " + auth.character_id + " is not valid! Message a mentor!"
-        return error
-    data = result[0]
-    #Update corp and alliance in json
-    alliance_id = None
-    corp_id = data['corporation_id']
-    ticker = ""
-    if 'alliance_id' in data:
-        alliance_id = data['alliance_id']
-        r = requests.get("https://esi.tech.ccp.is/latest/alliances/" + str(alliance_id) + "/?datasource=tranquility", headers={
-            'User-Agent': 'Maintainer: ' + config['MAINTAINER']})
-        ticker = r.json()['ticker']
+        await bot.send_message(channel,"User " + member.name + " ("+ discordQuery.character_name +") left the server!")
     else:
-        r = requests.get("https://esi.tech.ccp.is/latest/corporations/" + str(corp_id) + "/?datasource=tranquility", headers={
-            'User-Agent': 'Maintainer: ' + config['MAINTAINER']})
-        ticker = r.json()['ticker']
+        await bot.send_message(channel,"User " + member.name + " (not authenticated) left the server!") 
 
-    #Update nickname
-    try:
-        nick = "[" + ticker + "] " + auth.character_name
-        app.logger.info("Changing nickname of discord account " + message.author.id + " to " + nick + "!")
-        await bot.change_nickname(message.author,nick)
-    except Exception as e:
-        app.logger.error('Exception in change_nickname(): ' + str(e))
+@bot.event
+async def on_member_join(member):
+    """
+    Event when user joins the server
+    Args:
+        member (discord.Member) - member that joined the server
+    Returns:
+        None
+    """
+    server = bot.get_server(config['DISCORD_SERVER'])
+    if server is None:
+        app.logger.error("Server " + config['DISCORD_SERVER'] + " not found!")
+        return
+    channel = server.get_channel(config['DISCORD_PRIVATE_COMMAND_CHANNELS']['RECRUITMENT'])
+    if channel is None:
+        app.logger.error("Channel " + config['DISCORD_PRIVATE_COMMAND_CHANNELS']['RECRUITMENT]'] + " not found!")
+        return
 
-    #Update roles if they're in a certain corp
-    rolesToGive = []
-    rolesToRemove = []
-
-    #Update auth role
-    authRole = discord.utils.get(message.server.roles,name=config['BASE_AUTH_ROLE'])
-    if authRole is None:
-        app.logger.error("Role " + config['BASE_AUTH_ROLE'] + " not found!")
-    else:
-        rolesToGive.append(authRole)
-
-    for entry in config['DISCORD_BOT_AUTH_ROLES']:
-        role = discord.utils.get(message.server.roles, name=entry['role_name'])
-        if role is None:
-            app.logger.error("Role " + entry['role_name'] + " not found!")
-            continue
-        if entry['corp_id'] == corp_id:
-            if role not in message.author.roles:
-                app.logger.info("Giving " + message.author.id + " the " + role.name + " role!")
-                rolesToGive.append(role)
+    #Query the database to see if they're in there
+    discordQuery = DiscordUser.query.filter(DiscordUser.discord_id == member.id).first()
+    if discordQuery is not None:
+        #If they are, give them the appropriate roles and update their roles
+        #Update corp / alliance
+        app.logger.info("Making ESI post request to characters/affiliation endpoint for character id "+str(discordQuery.character_id))
+        r = requests.post("https://esi.tech.ccp.is/latest/characters/affiliation/?datasource=tranquility", json=[discordQuery.character_id],
+            headers = {'Content-Type': 'application/json', 'Accept':'application/json','User-Agent': 'Maintainer: ' + config['MAINTAINER']})
+        result = r.json()
+        if not result:
+            error = "Character ID " + discordQuery.character_id + " is not valid! Message a mentor!"
+            app.logger.error(error)
+            await bot.send_message(channel, error)
+            return
+        data = result[0]
+        #Update corp and alliance in json
+        alliance_id = None
+        corp_id = data['corporation_id']
+        ticker = ""
+        if 'alliance_id' in data:
+            alliance_id = data['alliance_id']
+            r = requests.get("https://esi.tech.ccp.is/latest/alliances/" + str(alliance_id) + "/?datasource=tranquility", headers={
+                'User-Agent': 'Maintainer: ' + config['MAINTAINER']})
+            ticker = r.json()['ticker']
         else:
-            if role in message.author.roles:
-                app.logger.info("Removing " + role.name + " from " + message.author.id + "!")
-                rolesToRemove.append(role)
+            r = requests.get("https://esi.tech.ccp.is/latest/corporations/" + str(corp_id) + "/?datasource=tranquility", headers={
+                'User-Agent': 'Maintainer: ' + config['MAINTAINER']})
+            ticker = r.json()['ticker']
 
-    #Apply roles
-    if len(rolesToGive) > 0:
+        discordQuery.corporation_id = corp_id
+        discordQuery.alliance_id = alliance_id
+        discordQuery.on_server = True
+        db.session.commit()
+
+        nick = "[" + ticker + "] " + discordQuery.character_name
+        await bot.send_message(channel,"User " + member.name + " joined the server as " + nick)
         try:
-            await bot.add_roles(message.author,*rolesToGive)
+            await bot.change_nickname(member,nick)
         except Exception as e:
-            app.logger.error('Exception in add_roles(): ' + str(e))
+            app.logger.error('Exception in change_nickname(): ' + str(e))
 
-    #Remove roles
-    if len(rolesToRemove) > 0:
-        try:
-            await bot.remove_roles(message.author,*rolesToRemove)
-        except Exception as e:
-            app.logger.error('Exception in remove_roles(): ' + str(e))
 
-    #Update database
-    auth.corporation_id = corp_id
-    auth.alliance_id = alliance_id
-    auth.DISCORD_BOT_id = message.author.id
-    app.logger.info(auth.character_name + " (" + str(auth.corporation_id) +", " + str(auth.alliance_id) + ")" +" authenticated with discord id " + auth.DISCORD_BOT_id)
-    db.session.commit()
-    return "Authenticated as " + auth.character_name
+        #Update roles if they're in a certain corp
+        rolesToGive = []
+
+        #Update auth role
+        authRole = discord.utils.get(server.roles,name=config['BASE_AUTH_ROLE'])
+        if authRole is None:
+            app.logger.error("Role " + config['BASE_AUTH_ROLE'] + " not found!")
+        else:
+            rolesToGive.append(authRole)
+
+        for entry in config['DISCORD_AUTH_ROLES']:
+            role = discord.utils.get(server.roles, name=entry['role_name'])
+            if role is None:
+                app.logger.error("Role " + entry['role_name'] + " not found!")
+                continue
+            if entry['corp_id'] == corp_id:
+                if role not in member.roles:
+                    app.logger.info("Giving " + member.name + " the " + role.name + " role!")
+                    rolesToGive.append(role)
+
+        #Apply roles
+        if len(rolesToGive) > 0:
+            try:
+                await bot.add_roles(member,*rolesToGive)
+            except Exception as e:
+                app.logger.error('Exception in add_roles(): ' + str(e))
+    else:
+        await bot.send_message(channel,"User " + member.name + " joined the server without authentication!")
 
 async def schedule_corp_update():
     while True:
@@ -186,7 +182,7 @@ async def schedule_corp_update():
 
 async def check_corp():
     #Retrieve members in database
-    data = DiscordUser.query.filter(DiscordUser.DISCORD_BOT_id != None).all()
+    data = DiscordUser.query.filter(DiscordUser.on_server == True).all()
 
     #Sort the data since the return from esi is sorted too
     currentIndex = 0
@@ -261,11 +257,11 @@ async def check_corp():
                 db.session.commit()
                 #Set nickname and give role
                 try:
-                    server = bot.get_server(config['DISCORD_BOT_SERVER'])
-                    member = server.get_member(tempList[index].DISCORD_BOT_id)
+                    server = bot.get_server(config['DISCORD_SERVER'])
+                    member = server.get_member(tempList[index].discord_id)
                     await bot.change_nickname(member,"[" + ticker + "] " + tempList[index].character_name)
 
-                    for entry in config['DISCORD_BOT_AUTH_ROLES']:
+                    for entry in config['DISCORD_AUTH_ROLES']:
                         role = discord.utils.get(server.roles, name=entry['role_name'])
                         if role is None:
                             app.logger.error("Role " + entry['role_name'] + " not found!")
@@ -293,7 +289,7 @@ if __name__ == '__main__':
         app.logger.info('Scheduling background tasks ...')
         app.logger.info('Starting run loop ...')
         bot.loop.create_task(schedule_corp_update())
-        bot.run(config['DISCORD_BOT_TOKEN'])
+        bot.run(config['DISCORD_TOKEN'])
     except KeyboardInterrupt:
         app.logger.warning('Logging out ...')
         bot.loop.run_until_complete(bot.logout())

@@ -13,18 +13,21 @@
     "EVE_CLIENT_SECRET":"",
     "EVE_CALLBACK_URI": "",
     "DISCORD_CLIENT_ID":"",
-    "DISCORD_CLIENT_SECRET":"K",
+    "DISCORD_CLIENT_SECRET":"",
     "DISCORD_REDIRECT_URI":"",
     "DISCORD_TOKEN": "",
     "DISCORD_COMMAND_PREFIX": "!",
     "DISCORD_DESCRIPTION": "",
     "DISCORD_SERVER":"",
     "DISCORD_SERVER_INVITE":"",
-    "DISCORD_BOT_AUTH_ROLES":[
+    "DISCORD_AUTH_ROLES":[
         {
             "role_name":"",
             "corp_id":
         }
     ],
-    "BASE_AUTH_ROLE":"Auth"
+    "DISCORD_PRIVATE_COMMAND_CHANNELS": {
+        "RECRUITMENT":""
+    },
+    "BASE_AUTH_ROLE":""
 }

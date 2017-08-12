@@ -15,8 +15,9 @@ class DiscordUser(db.Model):
 	discord_id = db.Column(db.String, unique=True, nullable = False)
 	discord_name= db.Column(db.String, unique=True, nullable = False)
 	discord_avatar = db.Column(db.String)
+	on_server = db.Column(db.Boolean, nullable = False)
 
-	def __init__(self,character_name,character_id,corporation_id,alliance_id,discord_id,discord_name,discord_avatar):
+	def __init__(self,character_name,character_id,corporation_id,alliance_id,discord_id,discord_name,discord_avatar,on_server=False):
 		self.date = datetime.utcnow()
 		self.character_name = character_name
 		self.character_id = character_id
@@ -25,6 +26,7 @@ class DiscordUser(db.Model):
 		self.discord_id = discord_id
 		self.discord_name = discord_name
 		self.discord_avatar = discord_avatar
+		self.on_server = on_server
 
 	def __repr__(self):
 		return '{},{},{},{},{},{},{},{},{}'.format(self.id,self.date,self.character_name,self.character_id,self.corporation_id,self.alliance_id,self.auth_code,self.discord_id,self.discord_name)
