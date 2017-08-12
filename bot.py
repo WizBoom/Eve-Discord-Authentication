@@ -339,6 +339,7 @@ async def remove_auth_user_roles(discordID):
 
     try:
         await bot.remove_roles(member,*roleList)
+        await bot.chance_nickname(member,None)
         index = deleteList['DISCORD_REMOVE_LIST'].index(discordID)
         deleteList['DISCORD_REMOVE_LIST'].pop(index)
         app.logger.info(discordID + ' has been unauthenticated!')
