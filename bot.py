@@ -316,8 +316,11 @@ async def remove_auth_user_roles(discordID):
     member = server.get_member(discordID)
     if member is None:
         app.logger.error("Member " + discordID + " not found in remove_auth_user_roles()!")
-        index = deleteList['DISCORD_REMOVE_LIST'].index(discordID)
-        deleteList['DISCORD_REMOVE_LIST'].pop(index)
+        for i in range(len(deleteList['DISCORD_REMOVE_LIST'])):
+            if deleteList['DISCORD_REMOVE_LIST'] == discordID
+            #index = deleteList['DISCORD_REMOVE_LIST'].index(discordID)
+                deleteList['DISCORD_REMOVE_LIST'].pop(i)
+                break
 
         with open('deleteList.json', 'w') as f:
             json.dump(deleteList, f, indent=4)
@@ -339,7 +342,7 @@ async def remove_auth_user_roles(discordID):
 
     try:
         await bot.remove_roles(member,*roleList)
-        await bot.chance_nickname(member,None)
+        await bot.change_nickname(member,None)
         index = deleteList['DISCORD_REMOVE_LIST'].index(discordID)
         deleteList['DISCORD_REMOVE_LIST'].pop(index)
         app.logger.info(discordID + ' has been unauthenticated!')
