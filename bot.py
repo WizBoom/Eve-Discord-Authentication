@@ -14,7 +14,7 @@ from app import app
 from models import *
 import sqlite3
 
-DISCORD_BOT_AUTH_SLEEP = 60
+DISCORD_BOT_AUTH_SLEEP = 3600
 DATABASE_MEMBER_UPDATE = 86400
 CHUNK_SIZE = 20
 
