@@ -32,7 +32,8 @@ class DiscordUser(db.Model):
 		return '{},{},{},{},{},{},{},{}'.format(self.id,self.date,self.character_name,self.character_id,self.corporation_id,self.alliance_id,self.discord_id,self.discord_name)
 
 class DiscordLinkRemoval(db.Model):
-	__tablename = "discord_link_removal"
+
+	__tablename__ = "discord_link_removal"
 
 	discord_id = db.Column(db.String, unique=True, nullable = False)
 
