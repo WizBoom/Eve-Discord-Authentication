@@ -22,9 +22,6 @@ CHUNK_SIZE = 20
 with open('config.json') as f:
     config = json.load(f)
 
-with open('deleteList.json') as f:
-    deleteList = json.load(f)
-
 # bot setup
 app.logger.info('Creating bot object ...')
 bot = commands.Bot(command_prefix=config['DISCORD_COMMAND_PREFIX'], description=config['DISCORD_DESCRIPTION'])
@@ -304,9 +301,7 @@ async def remove_auth_user_roles():
     Returns:
         None
     """
-    with open('deleteList.json') as f:
-        deleteList = json.load(f)
-    dlList = deleteList['DISCORD_REMOVE_LIST']
+    dlList = DiscordLinkRemoval.query.all():
     server = bot.get_server(config['DISCORD_SERVER'])
     for discordID in dlList:
         roleList = []
@@ -325,6 +320,8 @@ async def remove_auth_user_roles():
         #Check if the user hasn't been re-authenticated
         duq = DiscordUser.query.filter(DiscordUser.discord_id == discordID).first()
         if duq:
+            db.session.delete(discordID)
+            db.session.commit()
             continue
 
         for entry in config['DISCORD_AUTH_ROLES']:
@@ -338,14 +335,13 @@ async def remove_auth_user_roles():
         try:
             await bot.remove_roles(member,*roleList)
             await bot.change_nickname(member,None)
+            db.session.delete(discordID)
+            db.session.commit()
             app.logger.info(discordID + ' has been unauthenticated!')
 
         except Exception as e:
             app.logger.error('Exception in remove_roles(): ' + str(e))
-
-    deleteList['DISCORD_REMOVE_LIST'] = []
-    with open('deleteList.json', 'w') as f:
-        json.dump(deleteList, f, indent=4)
+        
 
 async def schedule_update_on_server():
     while True:
@@ -361,7 +357,7 @@ async def schedule_update_on_server():
             for m in server.members:
                 for r in dq:
                     if m.id == r.discord_id:
-                        app.logger.info("User " + m.name + " was on the server but was not marked! being so")
+                        app.logger.info("User " + m.name + " was on the server but was not marked being so!")
                         await on_member_join(m)
                         break
         except Exception as e:

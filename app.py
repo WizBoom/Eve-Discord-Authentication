@@ -15,9 +15,6 @@ from requests_oauthlib import OAuth2Session
 with open('config.json') as f:
     config = json.load(f)
 
-with open('deleteList.json') as f:
-    deleteList = json.load(f)
-
 #Create app
 app = Flask(__name__, template_folder='templates')
 app.config['SQLALCHEMY_DATABASE_URI'] = config['SQLALCHEMY_DATABASE_URI']
@@ -170,17 +167,11 @@ def remove_auth():
 	Returns:
 		Login page
 	"""
-	with open('deleteList.json') as f:
-		deleteList = json.load(f)
-
 	#DATABASE REMOVAL
 	try:
 		u = DiscordUser.query.filter(DiscordUser.character_id == session['EveID']).first()
-		if u.discord_id not in deleteList['DISCORD_REMOVE_LIST']:
-			deleteList['DISCORD_REMOVE_LIST'].append(u.discord_id)
-        
-		with open('deleteList.json', 'w') as f:
-			json.dump(deleteList, f, indent=4)
+		if not DiscordLinkRemoval.query.filter(DiscordLinkRemoval.discord_id == session['DiscordID']).all():
+			db.session.add(DiscordLinkRemoval(session['DiscordID']))
 
 		db.session.delete(u)
 		db.session.commit()
@@ -235,7 +226,7 @@ def link_to_database():
 		flash('Already linked!')
 		return redirect(url_for('login'))
 
-	app.logger.info("Making ESI post request to characters/affiliation endpoint")
+	app.logger.info("Making ESI post request to characters/affiliation endpoint with character id " + session['EveID'])
 	r = requests.post("https://esi.tech.ccp.is/latest/characters/affiliation/?datasource=tranquility", json=[session['EveID']],
 		headers = {'Content-Type': 'application/json', 'Accept':'application/json','User-Agent': 'Maintainer: ' + config['MAINTAINER']})
 	result = r.json()
