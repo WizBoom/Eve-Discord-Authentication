@@ -224,6 +224,8 @@ async def check_corp():
 
         for index in range(len(tempList)):
             member = server.get_member(tempList[index].discord_id)
+            if member is None:
+                continue
             if not tempList[index].character_id == sortedJSON[index]['character_id']:
                 app.logger.error("Character id " + str(tempList[index].character_id) + " does not match the data equivelant " + str(sortedJSON[index].character_id) + "!")
                 continue
