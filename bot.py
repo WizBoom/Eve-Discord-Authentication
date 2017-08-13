@@ -309,6 +309,8 @@ async def remove_auth_user_roles():
         member = server.get_member(discordID.discord_id)
         if member is None:
             app.logger.error("Member " + discordID.discord_id + " not found in remove_auth_user_roles()!")
+            db.session.delete(discordID)
+            db.session.commit()
             continue
 
         authRole = discord.utils.get(server.roles,name=config['BASE_AUTH_ROLE'])
