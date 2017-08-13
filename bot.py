@@ -301,14 +301,14 @@ async def remove_auth_user_roles():
     Returns:
         None
     """
-    dlList = DiscordLinkRemoval.query.all():
+    dlList = DiscordLinkRemoval.query.all()
     server = bot.get_server(config['DISCORD_SERVER'])
     for discordID in dlList:
         roleList = []
 
-        member = server.get_member(discordID)
+        member = server.get_member(discordID.discord_id)
         if member is None:
-            app.logger.error("Member " + discordID + " not found in remove_auth_user_roles()!")
+            app.logger.error("Member " + discordID.discord_id + " not found in remove_auth_user_roles()!")
             continue
 
         authRole = discord.utils.get(server.roles,name=config['BASE_AUTH_ROLE'])
@@ -318,7 +318,7 @@ async def remove_auth_user_roles():
             roleList.append(authRole)
 
         #Check if the user hasn't been re-authenticated
-        duq = DiscordUser.query.filter(DiscordUser.discord_id == discordID).first()
+        duq = DiscordUser.query.filter(DiscordUser.discord_id == discordID.discord_id).first()
         if duq:
             db.session.delete(discordID)
             db.session.commit()
@@ -336,8 +336,8 @@ async def remove_auth_user_roles():
             await bot.remove_roles(member,*roleList)
             await bot.change_nickname(member,None)
             db.session.delete(discordID)
+            app.logger.info(discordID.discord_id + ' has been unauthenticated!')
             db.session.commit()
-            app.logger.info(discordID + ' has been unauthenticated!')
 
         except Exception as e:
             app.logger.error('Exception in remove_roles(): ' + str(e))

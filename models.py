@@ -35,7 +35,7 @@ class DiscordLinkRemoval(db.Model):
 
 	__tablename__ = "discord_link_removal"
 
-	discord_id = db.Column(db.String, unique=True, nullable = False)
+	discord_id = db.Column(db.String, unique=True, nullable = False, primary_key=True)
 
 	def __init__(self, discord_id):
 		self.discord_id = discord_id

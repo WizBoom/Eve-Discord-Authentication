@@ -226,7 +226,7 @@ def link_to_database():
 		flash('Already linked!')
 		return redirect(url_for('login'))
 
-	app.logger.info("Making ESI post request to characters/affiliation endpoint with character id " + session['EveID'])
+	app.logger.info("Making ESI post request to characters/affiliation endpoint with character id " + str(session['EveID']))
 	r = requests.post("https://esi.tech.ccp.is/latest/characters/affiliation/?datasource=tranquility", json=[session['EveID']],
 		headers = {'Content-Type': 'application/json', 'Accept':'application/json','User-Agent': 'Maintainer: ' + config['MAINTAINER']})
 	result = r.json()
