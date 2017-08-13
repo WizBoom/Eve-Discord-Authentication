@@ -4,4 +4,3 @@ __pycache__
 *.db
 config.json
 log.txt
-deleteList.json
