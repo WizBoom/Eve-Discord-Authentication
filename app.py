@@ -170,13 +170,14 @@ def remove_auth():
 	Returns:
 		Login page
 	"""
+	with open('deleteList.json') as f:
+		deleteList = json.load(f)
+
 	#DATABASE REMOVAL
 	try:
 		u = DiscordUser.query.filter(DiscordUser.character_id == session['EveID']).first()
-		#from bot import DISCORD_TEST
-		#DISCORD_TEST = False
-		#remove_auth_user_roles(u.discord_id, bot)
-		deleteList['DISCORD_REMOVE_LIST'].append(u.discord_id)
+		if u.discord_id not in deleteList['DISCORD_REMOVE_LIST']:
+			deleteList['DISCORD_REMOVE_LIST'].append(u.discord_id)
         
 		with open('deleteList.json', 'w') as f:
 			json.dump(deleteList, f, indent=4)

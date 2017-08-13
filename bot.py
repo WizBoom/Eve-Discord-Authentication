@@ -292,66 +292,60 @@ async def schedule_remove_auth_roles():
     while True:
         try:
             await asyncio.sleep(1)
-            with open('deleteList.json') as f:
-                deleteList = json.load(f)
-            for discordID in deleteList['DISCORD_REMOVE_LIST']:
-                await remove_auth_user_roles(discordID)
+            await remove_auth_user_roles()
         except Exception as e:
             app.logger.error('Exception in schedule_remove_auth_roles(): ' + str(e))
 
-async def remove_auth_user_roles(discordID):
+async def remove_auth_user_roles():
     """
     Remove all roles related to authentication
     Args:
-        str: Discord ID of the user
+        None
     Returns:
         None
     """
-    roleList = []
+    with open('deleteList.json') as f:
+        deleteList = json.load(f)
+    dlList = deleteList['DISCORD_REMOVE_LIST']
     server = bot.get_server(config['DISCORD_SERVER'])
-    if server is None:
-        app.logger.error("Server " + config['DISCORD_SERVER'] + " not found!")
-        return
+    for discordID in dlList:
+        roleList = []
 
-    member = server.get_member(discordID)
-    if member is None:
-        app.logger.error("Member " + discordID + " not found in remove_auth_user_roles()!")
-        for i in range(len(deleteList['DISCORD_REMOVE_LIST'])):
-            if deleteList['DISCORD_REMOVE_LIST'] == discordID:
-            #index = deleteList['DISCORD_REMOVE_LIST'].index(discordID)
-                deleteList['DISCORD_REMOVE_LIST'].pop(i)
-                break
+        member = server.get_member(discordID)
+        if member is None:
+            app.logger.error("Member " + discordID + " not found in remove_auth_user_roles()!")
+            continue
 
-        with open('deleteList.json', 'w') as f:
-            json.dump(deleteList, f, indent=4)
-        return
+        authRole = discord.utils.get(server.roles,name=config['BASE_AUTH_ROLE'])
+        if authRole is None:
+            app.logger.error("Role " + config['BASE_AUTH_ROLE'] + " not found!")
+        else:
+            roleList.append(authRole)
 
-    authRole = discord.utils.get(server.roles,name=config['BASE_AUTH_ROLE'])
-    if authRole is None:
-        app.logger.error("Role " + config['BASE_AUTH_ROLE'] + " not found!")
-    else:
-        roleList.append(authRole)
+        #Check if the user hasn't been re-authenticated
+        duq = DiscordUser.query.filter(DiscordUser.discord_id == discordID).first()
+        if duq:
+            continue
 
-    for entry in config['DISCORD_AUTH_ROLES']:
-        role = discord.utils.get(server.roles, name=entry['role_name'])
-        if role is None:
-                app.logger.error("Role " + entry['role_name'] + " not found!")
-                continue
-        elif role in member.roles:
-            roleList.append(role)
+        for entry in config['DISCORD_AUTH_ROLES']:
+            role = discord.utils.get(server.roles, name=entry['role_name'])
+            if role is None:
+                    app.logger.error("Role " + entry['role_name'] + " not found!")
+                    continue
+            elif role in member.roles:
+                roleList.append(role)
 
-    try:
-        await bot.remove_roles(member,*roleList)
-        await bot.change_nickname(member,None)
-        index = deleteList['DISCORD_REMOVE_LIST'].index(discordID)
-        deleteList['DISCORD_REMOVE_LIST'].pop(index)
-        app.logger.info(discordID + ' has been unauthenticated!')
+        try:
+            await bot.remove_roles(member,*roleList)
+            await bot.change_nickname(member,None)
+            app.logger.info(discordID + ' has been unauthenticated!')
 
-        with open('deleteList.json', 'w') as f:
-            json.dump(deleteList, f, indent=4)
+        except Exception as e:
+            app.logger.error('Exception in remove_roles(): ' + str(e))
 
-    except Exception as e:
-        app.logger.error('Exception in remove_roles(): ' + str(e))
+    deleteList['DISCORD_REMOVE_LIST'] = []
+    with open('deleteList.json', 'w') as f:
+        json.dump(deleteList, f, indent=4)
 
 async def schedule_update_on_server():
     while True:
