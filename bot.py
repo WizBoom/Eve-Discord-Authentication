@@ -14,8 +14,8 @@ from app import app
 from models import *
 import sqlite3
 
-DISCORD_BOT_AUTH_SLEEP = 3600
-DATABASE_MEMBER_UPDATE = 86400
+DISCORD_BOT_AUTH_SLEEP = 60
+DATABASE_MEMBER_UPDATE = 60
 CHUNK_SIZE = 20
 
 # config setup
@@ -114,7 +114,21 @@ async def on_member_join(member):
             app.logger.error(error)
             await bot.send_message(channel, error)
             return
-        data = result[0]
+        if 'error' in result:
+                #Make different endpoint check
+                app.logger.info("ESI Post failed, using names endpoint instead")
+                r = requests.get("https://esi.tech.ccp.is/latest/characters/" + str(discordQuery.character_id) + "/?datasource=tranquility", headers={
+                    'User-Agent': 'Maintainer: '+ config['MAINTAINER']
+                     })
+                result = r.json()
+                if not result:
+                        error = "Character ID " + str(discordQuery.character_id) + " is not valid! Message a mentor!"
+                        flash(error, 'error')
+                        return redirect(url_for('login')) 
+                data = result
+        else:
+                data = result[0]
+
         #Update corp and alliance in json
         alliance_id = None
         corp_id = data['corporation_id']
@@ -135,8 +149,16 @@ async def on_member_join(member):
         db.session.commit()
 
         nick = "[" + ticker + "] " + discordQuery.character_name
+        if len(nick) > 32:
+             temp = nick.split(" ")
+             nick = temp [0] + " " + temp [1] + " "
+             if len(temp) <= 2:
+                 nick = "LONG USERNAME"
+             for i in range(2,len(temp)):
+                 nick += temp[i].title()[0] + "."
         await bot.send_message(channel,"User " + member.name + " joined the server as " + nick)
         try:
+            app.logger.info("Giving " + member.name + " the nickname " + nick + "!")
             await bot.change_nickname(member,nick)
         except Exception as e:
             app.logger.error('Exception in change_nickname(): ' + str(e))
@@ -206,8 +228,27 @@ async def check_corp():
         app.logger.info("Making ESI post request to characters/affiliation endpoint")
         r = requests.post("https://esi.tech.ccp.is/latest/characters/affiliation/?datasource=tranquility", json=charIDList,
             headers = {'Content-Type': 'application/json', 'Accept':'application/json','User-Agent': 'Maintainer: ' + config['MAINTAINER']})
-        data = r.json()
-        sortedJSON = sorted(data,key=lambda x:x['character_id'])
+        d = r.json()
+        if 'error' not in d:
+            sortedJSON = sorted(d,key=lambda x:x['character_id'])
+        else:
+            app.logger.info("ESI post request returned an error. Going over every character individually")
+            sortedJSON = []
+            #Fill up sortedJSON with manually entered values
+            for char in charIDList:
+                app.logger.info("Making request to " + "https://esi.tech.ccp.is/latest/characters/" + str(char) + "/?datasource=tranquility")
+                rChar = requests.get("https://esi.tech.ccp.is/latest/characters/" + str(char) + "/?datasource=tranquility", headers={
+                    'User-Agent': 'Maintainer: '+ config['MAINTAINER']
+                    })
+                returnData = rChar.json()
+                if 'error' not in returnData:
+                    jsonObject = {}
+                    if 'alliance_id' in returnData:
+                        jsonObject["alliance_id"] = returnData['alliance_id']
+                    jsonObject["corporation_id"] = returnData['corporation_id']
+                    jsonObject["character_id"] = char
+                    jsonData = json.dumps(jsonObject)
+                    sortedJSON.append(jsonObject)
         #Incase of a missmatch, remove the non-existant character IDs
         while len(sortedJSON) is not len(tempList):
             app.logger.info("Number of characters in database does not match the amount of returned characters in ESI. Checking which character is no longer valid")
@@ -221,21 +262,21 @@ async def check_corp():
                     invalidList.append(char)
                     app.logger.info(str(char) + " is not a valid character! Removed from list!")
             tempList = [t for t in tempList if t.character_id not in invalidList]
-
         for index in range(len(tempList)):
             member = server.get_member(tempList[index].discord_id)
             if member is None:
                 continue
             if not tempList[index].character_id == sortedJSON[index]['character_id']:
-                app.logger.error("Character id " + str(tempList[index].character_id) + " does not match the data equivelant " + str(sortedJSON[index].character_id) + "!")
+                app.logger.error("Character id " + str(tempList[index]['character_id']) + " does not match the data equivelant " + str(sortedJSON[index]['character_id']) + "!")
                 continue
             corpID_db = tempList[index].corporation_id
             allianceID_db = tempList[index].alliance_id
             allianceID = None
+
             if 'alliance_id' in sortedJSON[index]:
                 allianceID = sortedJSON[index]['alliance_id']
 
-            if not corpID_db == sortedJSON[index]['corporation_id'] or not allianceID_db == allianceID or member.nick is None or member.nick.find(tempList[index].character_name) == -1:
+            if not corpID_db == sortedJSON[index]['corporation_id'] or not allianceID_db == allianceID or member.nick is None:
                 app.logger.info(tempList[index].character_name  + "'s nickname needs to be changed due to change in corp / alliance / invalid username")
                 ticker = ""
                 if allianceID is not None:
@@ -262,7 +303,16 @@ async def check_corp():
                 db.session.commit()
                 #Set nickname and give role
                 try:
-                    await bot.change_nickname(member,"[" + ticker + "] " + tempList[index].character_name)
+                    nick = "[" + ticker + "] " + tempList[index].character_name
+                    if len(nick) > 32:
+                        temp = nick.split(" ")
+                        nick = temp [0] + " " + temp [1] + " "
+                        if len(temp) <= 2:
+                            nick = "LONG USERNAME"
+                        for i in range(2,len(temp)):
+                            nick += temp[i].title()[0] + "."
+                        app.logger.info("Giving " + member.name + " the nickname " + nick + "!")
+                    await bot.change_nickname(member,nick)
 
                     for entry in config['DISCORD_AUTH_ROLES']:
                         role = discord.utils.get(server.roles, name=entry['role_name'])

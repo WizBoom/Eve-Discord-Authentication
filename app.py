@@ -64,8 +64,7 @@ def make_session(token=None, state=None, scope=None):
         },
         auto_refresh_url=TOKEN_URL)
 
-if 'http://' in config['DISCORD_REDIRECT_URI']:
-    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = 'true'
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = 'true'
 
 @app.route('/')
 def login():
@@ -235,7 +234,21 @@ def link_to_database():
 		flash(error, 'error')
 		return redirect(url_for('login')) 
 
-	data = result[0]
+	if 'error' in result:
+		#Make different endpoint check
+		app.logger.info("ESI Post failed, using names endpoint instead")
+		r = requests.get("https://esi.tech.ccp.is/latest/characters/" + str(session['EveID']) + "/?datasource=tranquility", headers={
+                    'User-Agent': 'Maintainer: '+ config['MAINTAINER']
+                    })
+		result = r.json()
+		if not result:
+			error = "Character ID " + str(session['EveID']) + " is not valid! Message a mentor!"
+			flash(error, 'error')
+			return redirect(url_for('login')) 
+		data = result
+	else:
+		data = result[0]
+	
     #Update corp and alliance in json
 	alliance_id = None
 	corp_id = data['corporation_id']
