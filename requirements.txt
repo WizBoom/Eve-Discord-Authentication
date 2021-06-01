@@ -22,7 +22,7 @@ schedule==0.4.3
 six==1.10.0
 SQLAlchemy==1.1.13
 update-checker==0.16
-urllib3==1.21.1
+urllib3==1.26.5
 websocket-client==0.44.0
 websockets==3.3
 Werkzeug==0.12.2
