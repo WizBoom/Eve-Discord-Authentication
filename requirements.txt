@@ -24,6 +24,6 @@ SQLAlchemy==1.1.13
 update-checker==0.16
 urllib3==1.21.1
 websocket-client==0.44.0
-websockets==3.3
+websockets==9.1
 Werkzeug==0.12.2
 xmltodict==0.11.0
